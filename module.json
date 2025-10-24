@@ -1,0 +1,38 @@
+{
+    "id": "pf2e-basement-buddies",
+    "title": "PF2e Basement Buddies",
+    "description": "QOL helpers for PF2e; includes optional auto-install for Avoid Dire Fate and Escalation Die.",
+    "version": "0.4.7",
+    "compatibility": {
+        "minimum": "13",
+        "verified": "13"
+    },
+    "authors": [
+        {
+            "name": "Mike Hillmann"
+        }
+    ],
+    "relationships": {
+        "systems": [
+            {
+                "id": "pf2e",
+                "type": "system",
+                "compatibility": {
+                    "minimum": "7.6.0",
+                    "verified": "7.6.3"
+                }
+            }
+        ]
+    },
+    "esmodules": [
+        "scripts/module.js"
+    ],
+    "languages": [
+        {
+            "lang": "en",
+            "name": "English",
+            "path": "lang/en.json"
+        }
+    ],
+    "readme": "README.md"
+}
