@@ -9,7 +9,7 @@ export function installAvoidDireFate() {
     if (_adfHookId) return;
     _adfHookId = Hooks.on("renderChatMessage", onRenderChatMessage);
     logger.log("ADF: installed renderChatMessage hook", _adfHookId);
-    ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ADF.On"));
+    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ADF.On"));        //v0.5.1 No longer show, its working
 }
 
 export function uninstallAvoidDireFate() {
@@ -17,7 +17,7 @@ export function uninstallAvoidDireFate() {
         Hooks.off("renderChatMessage", _adfHookId);
         logger.log("ADF: uninstalled renderChatMessage hook", _adfHookId);
         _adfHookId = null;
-        ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ADF.Off"));
+        //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ADF.Off"));   //v0.5.1 No longer show, its working
     }
 }
 

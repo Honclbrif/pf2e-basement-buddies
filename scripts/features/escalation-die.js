@@ -105,7 +105,7 @@ export async function installEscalationDie(showPlusLabels) {
 
     if (!game[STATE_KEY].installed) {
         game[STATE_KEY].installed = true;
-        ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.On"));
+        //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.On"));   //v0.5.1 No longer show, its working
     }
 }
 
@@ -126,32 +126,16 @@ export async function uninstallEscalationDie() {
         }
     }
     delete game[STATE_KEY];
-    ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.Off"));
-}
-
-function migrateSettings(old) {
-    if (!old) return { showPlusLabels: DEFAULT_SHOW_PLUS_LABELS };
-    if ("showPlusLabels" in old) return old; // already new format
-    if ("showBadge" in old) {                 // migrate from two-checkbox version
-        const showPlusLabels = !!old.showBadge && !!old.plusBadge;
-        return { showPlusLabels };
-    }
-    return { showPlusLabels: DEFAULT_SHOW_PLUS_LABELS };
-}
-
-function getSettings() {
-    const raw = game[STATE_KEY]?.settings;
-    return migrateSettings(raw);
+    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.Off"));  //v0.5.1 No longer show, its working
 }
 
 function badgeObject(value) {
-    logger.debug("ED: badgeObject:start");
-    const { showPlusLabels } = getSettings();
+    logger.debug("ED: badgeObject");
+    const { showPlusLabels } = game[STATE_KEY]?.settings;
     if (!showPlusLabels) return null;
     if (value <= 0) return null;                 // ← hide at 0 to avoid auto-remove
     return { type: "counter", value, labels: makeLabels() };
 }
-
 function isEligibleActor(actor) {
     if (!actor) return false;
     if (actor.type === "character" || actor.type === "eidolon") return true;
@@ -163,23 +147,26 @@ function makeLabels() {
     return Array.from({ length: MAX_BONUS }, (_, i) => `+${i + 1}`);
 }
 function getSceneById(sceneId) {
-    logger.debug("ED: getSceneById:start"); return (typeof sceneId === "string") ? game.scenes.get(sceneId) : (sceneId ?? canvas.scene);
+    logger.debug("ED: getSceneById");
+    return (typeof sceneId === "string") ? game.scenes.get(sceneId) : (sceneId ?? canvas.scene);
 }
 function tokenDocsOnScene(scene) {
-    logger.debug("ED: tokenDocsOnScene:start"); return (scene?.tokens?.contents ?? []).filter(td => isEligibleActor(td.actor));
+    logger.debug("ED: tokenDocsOnScene");
+    return (scene?.tokens?.contents ?? []).filter(td => isEligibleActor(td.actor));
 }
 function tokenIdsInCombat(combat) {
-    logger.debug("ED: tokenIdsInCombat:start"); return new Set((combat?.combatants ?? []).map(c => c?.token?.id ?? c?.tokenId).filter(Boolean));
+    logger.debug("ED: tokenIdsInCombat");
+    return new Set((combat?.combatants ?? []).map(c => c?.token?.id ?? c?.tokenId).filter(Boolean));
 }
 async function ensureEffect(actor) {
-    logger.debug("ED: ensureEffect:start");
+    logger.debug("ED: ensureEffect");
     let effect = actor.items.find((i) => i.type === "effect" && i.name === EFFECT_NAME);
     if (effect) return effect;
     const created = await actor.createEmbeddedDocuments("Item", [EFFECT_DATA]);
     return created?.[0] ?? null;
 }
 async function applyBonus(actor, round) {
-    logger.debug("ED: applyBonus:start");
+    logger.debug("ED: applyBonus");
     const effect = await ensureEffect(actor);
     if (!effect) return;
 
@@ -207,11 +194,13 @@ async function applyBonus(actor, round) {
     if (changed) await effect.update(updateData);
 }
 async function updateForScene(scene) {
-    logger.debug("ED: updateForScene:start");
-    if (!scene) return;
+    if (!scene || !game.combat) return;
+    logger.debug("ED: updateForScene");
     const round = game.combat?.round ?? 1;
     for (const td of tokenDocsOnScene(scene)) {
-        try { await applyBonus(td.actor, round); } catch (e) { logger.debug("applyBonus error", e); }
+        try { await applyBonus(td.actor, round); } catch (e) {
+            logger.debug("applyBonus error", e);
+        }
     }
 }
 async function removeEffectsFromScene(scene, combat) {
@@ -226,7 +215,9 @@ async function removeEffectsFromScene(scene, combat) {
         try {
             logger.debug(`Cleanup removing ${ids.length} effect(s) from non-combatant`, actor.name, ids);
             await actor.deleteEmbeddedDocuments("Item", ids, { strict: false, [STATE_KEY]: { cleanup: true } });
-        } catch (e) { logger.debug("removeEffectsFromScene (non-combatant) error", e); }
+        } catch (e) {
+            logger.debug("removeEffectsFromScene (non-combatant) error", e);
+        }
     }
 }
 
