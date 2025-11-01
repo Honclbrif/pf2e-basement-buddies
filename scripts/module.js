@@ -4,8 +4,16 @@ import { logger } from "./logger.js";
 import { installAvoidDireFate, uninstallAvoidDireFate } from "./features/avoid-dire-fate.js";
 import { installEscalationDie, uninstallEscalationDie } from "./features/escalation-die.js";
 
-const onADF = (enabled) => { enabled ? installAvoidDireFate() : uninstallAvoidDireFate(); };
-const onED = (enabled) => { enabled ? installEscalationDie() : uninstallEscalationDie(); };
+const onADF = (enabled) => {
+    if (game.user.isGM) {
+        enabled ? installAvoidDireFate() : uninstallAvoidDireFate();
+    }
+};
+const onED = (enabled) => {
+    if (game.user.isGM) {
+        enabled ? installEscalationDie() : uninstallEscalationDie();
+    }
+};
 
 Hooks.once("init", () => {
     console.log("[PF2e Basement Buddies] Init");
