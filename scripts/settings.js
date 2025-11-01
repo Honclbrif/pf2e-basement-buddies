@@ -22,15 +22,5 @@ export function registerSettings(onAvoidToggle, onEscalationToggle) {
         scope: "world", config: true, type: Boolean, default: false, restricted: true,
         onChange: (v) => { logger.debug("ED setting changed:", v); onEscalationToggle?.(!!v); },
     });
-    game.settings.register(MODULE_ID, SETTING_KEYS.escalationDieShowBadge, {
-        name: game.i18n.localize("PF2EBB.Settings.ED.ShowBadgeName"),
-        hint: game.i18n.localize("PF2EBB.Settings.ED.ShowBadgeHint"),
-        scope: "world", config: true, type: Boolean, default: false, restricted: true,
-        onChange: (v) => {
-            logger.debug("ED showBadge changed:", v);
-            const enabled = game.settings.get(MODULE_ID, SETTING_KEYS.escalationDie);
-            onEscalationToggle?.(!!enabled);
-        },
-    });
     logger.debug("Finished registering settings.");
 }

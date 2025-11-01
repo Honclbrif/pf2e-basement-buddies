@@ -8,8 +8,6 @@
     "PF2EBB.Settings.ED.Title": "Escalation Die!",
     "PF2EBB.Settings.ED.ToggleName": "Give players a bone for long combats",
     "PF2EBB.Settings.ED.ToggleHint": "If checked, runs the Escalation Die! logic at combat start and whenever the combat round changes.",
-    "PF2EBB.Settings.ED.ShowBadgeName": "Show +1\u2026+5 badge on effect",
-    "PF2EBB.Settings.ED.ShowBadgeHint": "If checked, the Escalation Die effect icon shows a numeric badge matching the current value.",
     "PF2EBB.Notif.ADF.On": "PF2e Basement Buddies: Avoid Dire Fate installed.",
     "PF2EBB.Notif.ADF.Off": "PF2e Basement Buddies: Avoid Dire Fate removed.",
     "PF2EBB.Notif.ED.On": "PF2e Basement Buddies: Escalation Die! installed.",

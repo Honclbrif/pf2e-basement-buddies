@@ -1,15 +1,13 @@
 import { MODULE_ID, SETTING_KEYS } from "../settings.js";
 import { logger } from "../logger.js";
 
-let _combatHookId = null;
-
 // === CONSTANTS ===
 const EFFECT_NAME = "Escalation Die!";
 const MAX_BONUS = 5;
 const SELECTORS = ["strike-attack-roll", "spell-attack-roll", "spell-dc"];
 const STATE_KEY = "pf2eEscalation"; // namespace on game
-const DEFAULT_SHOW_PLUS_LABELS = true; // if false, no badge shown at all
-const FORMULA = (round) => Math.min(MAX_BONUS, Math.max(0, Math.max(1, round) - 1));
+
+let _edHooks = null;
 
 // Effect prototype (untyped FlatModifier; selectors in one rule)
 const EFFECT_DATA = {
@@ -22,218 +20,229 @@ const EFFECT_DATA = {
             {
                 key: "FlatModifier",
                 selector: SELECTORS,
-                value: 0 // overwritten by hook updates
+                type: "untyped",
+                value: "@item.badge.value"  // <-- reads directly from the badge counter
             }
         ],
-        badge: null, // set on install if showing labels
-        tokenIcon: { show: false } // hide effect icon on tokens
+        badge: null,                        // set/updated by the hook each round
+        tokenIcon: { show: false }          // keep hidden on tokens
     }
 };
 
 // === HOOKS ===
 function registerHooks() {
     logger.debug("ED: registerHooks:start");
-    const hooks = {};
+    if (_edHooks) {
+        logger.warn("ED: Hooks already installed");
+        return;
+    }
 
-    // Post-update guard: revert any non‑GM badge change that slips through
-    hooks.updateItem = Hooks.on("updateItem", async (item, change, options, userId) => {
-        // Only our effect
-        const isEffect = item?.type === "effect" || item?.isOfType?.("effect");
-        if (!isEffect || item?.name !== EFFECT_NAME) return;
-        if (options?.[STATE_KEY]?.revert) return; // avoid loops from our own revert
+    _edHooks = {};
 
-        // Allow GMs; only guard players
+    // On combat creation (round starts at 1). Ensure no effect at start.
+    _edHooks.createCombat = Hooks.on("createCombat", (combat) => {
+        logger.debug("ED: createCombat");
+        trySyncEscalationDieForCombat(combat, combat?.round ?? 1);
+    });
+
+    // On round change, adjust all combatants.
+    _edHooks.updateCombat = Hooks.on("updateCombat", (combat, changed) => {
+        logger.debug("ED: updateCombat", changed);
+        if (Object.hasOwn(changed, "round")) {
+            logger.debug("ED: updateCombat");
+            trySyncEscalationDieForCombat(combat, combat.round ?? 1);
+        }
+    });
+
+    // when a combatant is added mid-encounter, sync just that actor
+    _edHooks.createCombatant = Hooks.on("createCombatant", (combatant, options, userId) => {
+        const combat = combatant?.parent;
+        const actor = combatant?.actor;
+        if (!combat || !isEligibleActor(actor)) return;
+        const value = escalationValueFromRound(combat.round ?? 1);
+        logger.debug("ED: createCombatant → sync", actor?.name, "value", value);
+        // no await (don’t block the hook), but safe to await if you prefer
+        syncActorEscalationEffect(actor, value);
+    });
+
+    // when a combatant is removed, drop the effect only if that actor no longer appears in this combat
+    _edHooks.deleteCombatant = Hooks.on("deleteCombatant", (combatant, options, userId) => {
+        const combat = combatant?.parent;
+        const actor = combatant?.actor;
+        if (!combat || !isEligibleActor(actor)) return;
+
+        // If the actor still has another token in this combat, keep the effect.
+        const stillPresent = combat.combatants.some(c => c.actor?.id === actor.id);
+        logger.debug("ED: deleteCombatant", actor?.name, "stillPresent?", stillPresent);
+
+        if (!stillPresent) {
+            // sync to 0 → our sync function will delete the effect
+            syncActorEscalationEffect(actor, 0);
+        }
+    });
+
+    // // On combat deletion, remove the effect from participants of that combat.
+    // // pf2e delete the effect automatically on end of combat
+    // Hooks.on("deleteCombat", (combat) => {
+    //     logger.debug("ED: deleteCombat");
+    //     trySyncEscalationDieForCombat(combat, 0);
+    // });
+
+    // Disallow manual edits of the badge by users; allow our own programmatic updates.
+    _edHooks.preUpdateItem = Hooks.on("preUpdateItem", (item, change, options, userId) => {
+        if (!(item?.parent instanceof Actor)) return;
+        if (item.type !== "effect" || item.name !== EFFECT_NAME) return;
+        logger.debug("ED: preUpdateItem");
+
+        // Allow our own updates (we set this option when updating).
+        if (options?.[MODULE_ID]?.edManaged === true) return;
+
+        //  Allow GM to alter (for testing)
         const user = game.users.get(userId);
         if (user?.isGM) return;
 
-        // Did the change touch the badge?
-        const flat = foundry.utils.flattenObject(change ?? {});
-        const touchedBadge = (change?.system && Object.prototype.hasOwnProperty.call(change.system, "badge"))
-            || Object.keys(flat).some(k => k.startsWith("system.badge"));
-        if (!touchedBadge) return;
-
-        // Snap back to the macro-controlled value
-        const round = game.combat?.round ?? 1;
-        const value = FORMULA(round);
-        const newBadge = badgeObject(value); // null at 0 (Option A)
-        try {
-            await item.update({ "system.badge": newBadge }, { [STATE_KEY]: { revert: true } });
-        } catch (e) { /* no-op */ }
+        // If someone tries to change the badge or hide the icon, block it.
+        const touchesBadge = "system" in change && "badge" in (change.system ?? {});
+        const touchesIcon = "system" in change && "tokenIcon" in (change.system ?? {});
+        if (touchesBadge || touchesIcon) {
+            ui.notifications?.warn("Escalation Die is managed automatically.");
+            return false;
+        }
     });
-
-    // Prevent non‑GM deletion of this effect (but allow our own cleanup/uninstall)
-    hooks.preDeleteItem = Hooks.on("preDeleteItem", (item, options, userId) => {
-        const isEffect = item?.type === "effect" || item?.isOfType?.("effect");
-        if (!isEffect || item?.name !== EFFECT_NAME) return;
-        const user = game.users.get(userId);
-        if (user?.isGM) return; // GM can delete
-        if (options?.[STATE_KEY]?.cleanup) return; // our scripted cleanup
-        return false; // block player deletion
-    });
-
-    hooks.createCombat = Hooks.on("createCombat", async (combat) => {
-        const scene = getSceneById(combat.scene ?? combat.sceneId);
-        await updateForScene(scene);
-    });
-
-    hooks.updateCombat = Hooks.on("updateCombat", async (combat, changed) => {
-        if ("round" in changed || "turn" in changed) await updateForScene(getSceneById(combat.scene ?? combat.sceneId));
-    });
-
-    hooks.deleteCombat = Hooks.on("deleteCombat", async (combat) => {
-        const scene = getSceneById(combat.scene ?? combat.sceneId);
-        if (foundry?.utils?.sleep) { await foundry.utils.sleep(150); } else { await new Promise((r) => setTimeout(r, 150)); }
-        await removeEffectsFromScene(scene, combat);
-    });
-
-    hooks.createToken = Hooks.on("createToken", () => updateForScene(canvas.scene));
-    hooks.deleteToken = Hooks.on("deleteToken", () => updateForScene(canvas.scene));
-    hooks.updateToken = Hooks.on("updateToken", () => updateForScene(canvas.scene));
-
-    return hooks;
 }
 
-export async function installEscalationDie(showPlusLabels) {
-    logger.debug("ED: installEscalationDie(" + showPlusLabels + ")");
+export async function installEscalationDie() {
+    logger.debug("ED: installEscalationDie");
 
-    game[STATE_KEY] ??= {};
-    game[STATE_KEY].settings = { showPlusLabels: !!showPlusLabels };
-    EFFECT_DATA.system.badge = badgeObject(0); // initialize for new creations
+    registerHooks();
 
-    await updateForScene(canvas.scene);
-    if (!game[STATE_KEY].hooks) game[STATE_KEY].hooks = registerHooks();
+    trySyncEscalationDieForCombat(game.combat, game.combat?.round ?? 1);
 
-    if (!game[STATE_KEY].installed) {
-        game[STATE_KEY].installed = true;
-        //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.On"));   //v0.5.1 No longer show, its working
-    }
+    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.On"));
 }
 
 export async function uninstallEscalationDie() {
-    logger.debug("ED: uninstallEscalationDie(");
+    logger.debug("ED: uninstallEscalationDie");
 
-    const state = game[STATE_KEY];
-    if (state?.hooks) { for (const [event, id] of Object.entries(state.hooks)) { Hooks.off(event, id); } }
-    // Proactive removal outside of combat (safe; no PF2e expiry races)
-    const scene = canvas.scene;
-    for (const td of tokenDocsOnScene(scene)) {
-        const actor = td.actor; if (!actor) continue;
-        const ids = actor.items.filter(i => i.type === "effect" && i.name === EFFECT_NAME).map(i => i.id);
-        if (ids.length) {
-            try { await actor.deleteEmbeddedDocuments("Item", ids, { strict: false, [STATE_KEY]: { cleanup: true } }); } catch (e) {
-                logger.debug("uninstall cleanup", e);
-            }
+    trySyncEscalationDieForCombat(game.combat, 0);
+
+    if (_edHooks) {
+        for (const [event, id] of Object.entries(_edHooks)) {
+            Hooks.off(event, id);
         }
     }
-    delete game[STATE_KEY];
-    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.Off"));  //v0.5.1 No longer show, its working
+
+    _edHooks = null;
+    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.Off"));
 }
 
-function badgeObject(value) {
-    logger.debug("ED: badgeObject");
-    const { showPlusLabels } = game[STATE_KEY]?.settings;
-    if (!showPlusLabels) return null;
-    if (value <= 0) return null;                 // ← hide at 0 to avoid auto-remove
-    return { type: "counter", value, labels: makeLabels() };
+/** Compute +N from round (0 at round 1, +1 at round 2, capped). */
+function escalationValueFromRound(round) {
+    const r = Math.max(0, Number(round) | 0);
+    if (r <= 1) return 0;
+    return Math.min(MAX_BONUS, r - 1);
 }
+
 function isEligibleActor(actor) {
     if (!actor) return false;
     if (actor.type === "character" || actor.type === "eidolon") return true;
     const traits = actor.system?.traits?.value ?? [];
     return actor.type === "npc" && Array.isArray(traits) && traits.includes("eidolon");
 }
-function makeLabels() {
-    // PF2e maps labels[0] → counter value 1, labels[1] → 2, etc.
-    return Array.from({ length: MAX_BONUS }, (_, i) => `+${i + 1}`);
-}
-function getSceneById(sceneId) {
-    logger.debug("ED: getSceneById");
-    return (typeof sceneId === "string") ? game.scenes.get(sceneId) : (sceneId ?? canvas.scene);
-}
-function tokenDocsOnScene(scene) {
-    logger.debug("ED: tokenDocsOnScene");
-    return (scene?.tokens?.contents ?? []).filter(td => isEligibleActor(td.actor));
-}
-function tokenIdsInCombat(combat) {
-    logger.debug("ED: tokenIdsInCombat");
-    return new Set((combat?.combatants ?? []).map(c => c?.token?.id ?? c?.tokenId).filter(Boolean));
-}
-async function ensureEffect(actor) {
-    logger.debug("ED: ensureEffect");
-    let effect = actor.items.find((i) => i.type === "effect" && i.name === EFFECT_NAME);
-    if (effect) return effect;
-    const created = await actor.createEmbeddedDocuments("Item", [EFFECT_DATA]);
-    return created?.[0] ?? null;
-}
-async function applyBonus(actor, round) {
-    logger.debug("ED: applyBonus");
-    const effect = await ensureEffect(actor);
-    if (!effect) return;
 
-    const rules = foundry.utils.duplicate(effect.system.rules ?? []);
-    let changed = false;
+/** Core sync: enforce desired state for all combatants based on the current round. */
+async function trySyncEscalationDieForCombat(combat, round) {
+    if (!combat) return;
+    const value = escalationValueFromRound(round); // 0 for r<=1, 1..MAX for r>=2
+    const promises = [];
 
-    for (const rule of rules) {
-        if (rule.key !== "FlatModifier") continue;
-        const sels = Array.isArray(rule.selector) ? rule.selector : [rule.selector];
-        const hasAll = SELECTORS.every((s) => sels.includes(s));
-        if (!hasAll) continue;
-        const newVal = FORMULA(round);
-        if (rule.value !== newVal) { rule.value = newVal; changed = true; }
+    for (const c of combat.combatants) {
+        const actor = c?.actor;
+        if (!isEligibleActor(actor)) continue;
+        promises.push(syncActorEscalationEffect(actor, value));
     }
 
-    const badgeVal = FORMULA(round);
-    const desiredBadge = badgeObject(badgeVal); // null if disabled
-    const currentBadge = effect.system.badge ?? null;
-
-    const updateData = { "system.rules": rules };
-    // Ensure the token overlay icon stays hidden even on existing effects
-    if (effect.system?.tokenIcon?.show !== false) updateData["system.tokenIcon.show"] = false;
-    if (JSON.stringify(currentBadge) !== JSON.stringify(desiredBadge)) updateData["system.badge"] = desiredBadge, changed = true;
-
-    if (changed) await effect.update(updateData);
+    try {
+        await Promise.allSettled(promises);
+    } catch (err) {
+        console.error(`[${MODULE_ID}] Escalation sync error`, err);
+    }
 }
-async function updateForScene(scene) {
-    if (!scene || !game.combat) return;
-    logger.debug("ED: updateForScene");
-    const round = game.combat?.round ?? 1;
-    for (const td of tokenDocsOnScene(scene)) {
-        try { await applyBonus(td.actor, round); } catch (e) {
-            logger.debug("applyBonus error", e);
+
+/** Ensure the actor has the correct effect state for the current value. */
+async function syncActorEscalationEffect(actor, value) {
+    const effect = findEscalationEffect(actor);
+
+    // No effect in round 1 (value 0): remove if present.
+    if (value === 0) {
+        if (effect) {
+            await effect.delete();
         }
+        return;
     }
-}
-async function removeEffectsFromScene(scene, combat) {
-    logger.debug("ED: removeEffectsFromScene:start");
-    if (!scene) return;
-    const inTracker = tokenIdsInCombat(combat);
-    for (const td of tokenDocsOnScene(scene)) {
-        if (inTracker.has(td.id)) continue; // PF2e will expire these automatically
-        const actor = td.actor; if (!actor) continue;
-        const ids = actor.items.filter(i => i.type === "effect" && i.name === EFFECT_NAME).map(i => i.id);
-        if (!ids.length) continue;
+
+    if (!effect) {
+        // Create new effect with the correct initial badge value.
+        const data = buildEffectData(value);
         try {
-            logger.debug(`Cleanup removing ${ids.length} effect(s) from non-combatant`, actor.name, ids);
-            await actor.deleteEmbeddedDocuments("Item", ids, { strict: false, [STATE_KEY]: { cleanup: true } });
-        } catch (e) {
-            logger.debug("removeEffectsFromScene (non-combatant) error", e);
+            const created = await actor.createEmbeddedDocuments("Item", [data], { [MODULE_ID]: { edManaged: true } });
+            return created?.[0];
+        } catch (err) {
+            console.error(`[${MODULE_ID}] Failed to create Escalation Die on ${actor.name}`, err);
+            return;
+        }
+    }
+
+    // Update existing effect's badge (and ensure token icon is visible).
+    const currentVal = Number(effect.system?.badge?.value ?? 0);
+    const showIcon = !!effect.system?.tokenIcon?.show;
+
+    // Only update if something changed.
+    if (currentVal !== value || !showIcon) {
+        const updateData = {
+            _id: effect.id,
+            "system.badge": { type: "counter", value },
+            "system.tokenIcon.show": true,
+        };
+        try {
+            await actor.updateEmbeddedDocuments("Item", [updateData], { [MODULE_ID]: { edManaged: true } });
+        } catch (err) {
+            console.error(`[${MODULE_ID}] Failed to update Escalation Die on ${actor.name}`, err);
         }
     }
 }
 
-export function setEscalationDieActive(enabled) {
-    if (enabled) enableEscalationDieAuto();
-    else disableEscalationDieAuto();
+/** Find the escalation effect on an actor. */
+function findEscalationEffect(actor) {
+    return actor.items.find((i) => i.type === "effect" && i.name === EFFECT_NAME) ?? null;
 }
 
-export function enableEscalationDieAuto() {
-    logger.debug("ED: enableEscalationDieAuto:start");
-    const show = game.settings.get(MODULE_ID, SETTING_KEYS.escalationDieShowBadge);
-    return installEscalationDie(!!show);
-}
-
-
-export function disableEscalationDieAuto() {
-    logger.debug("ED: disableEscalationDieAuto:start");
-    return uninstallEscalationDie();
+/** Build a fresh effect document (badge visible + FlatModifier reads @item.badge.value). */
+function buildEffectData(value) {
+    return {
+        name: EFFECT_NAME,
+        type: "effect",
+        img: "icons/magic/time/hourglass-yellow-green.webp",
+        system: {
+            level: { value: 0 },
+            duration: { unit: "encounter", value: null, sustained: false, expiry: "turn-start" },
+            start: { value: 0, initiative: null },
+            // Always show the numeric counter; no labels / no plus prefix.
+            badge: { type: "counter", value },
+            tokenIcon: { show: true },
+            rules: [
+                {
+                    key: "FlatModifier",
+                    selector: SELECTORS,
+                    type: "untyped",
+                    // Pull directly from the visible counter badge
+                    value: "@item.badge.value",
+                },
+            ],
+        },
+        flags: {
+            core: { sourceId: null },
+            [MODULE_ID]: { edManaged: true },
+        },
+    };
 }

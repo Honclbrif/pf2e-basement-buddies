@@ -2,13 +2,13 @@
 import { MODULE_ID, SETTING_KEYS, registerSettings } from "./settings.js";
 import { logger } from "./logger.js";
 import { installAvoidDireFate, uninstallAvoidDireFate } from "./features/avoid-dire-fate.js";
-import { enableEscalationDieAuto, disableEscalationDieAuto } from "./features/escalation-die.js";
+import { installEscalationDie, uninstallEscalationDie } from "./features/escalation-die.js";
 
 const onADF = (enabled) => { enabled ? installAvoidDireFate() : uninstallAvoidDireFate(); };
-const onED = (enabled) => { enabled ? enableEscalationDieAuto() : disableEscalationDieAuto(); };
+const onED = (enabled) => { enabled ? installEscalationDie() : uninstallEscalationDie(); };
 
 Hooks.once("init", () => {
-    console.log("[PF2e Basement Buddies] Init start");
+    console.log("[PF2e Basement Buddies] Init");
     try {
         registerSettings(onADF, onED);
         try { logger.setDebug(!!game.settings.get(MODULE_ID, SETTING_KEYS.debug)); } catch { }
