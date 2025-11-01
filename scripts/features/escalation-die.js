@@ -202,7 +202,6 @@ async function syncActorEscalationEffect(actor, value) {
         const updateData = {
             _id: effect.id,
             "system.badge": { type: "counter", value },
-            "system.tokenIcon.show": true,
         };
         try {
             await actor.updateEmbeddedDocuments("Item", [updateData], { [MODULE_ID]: { edManaged: true } });
@@ -227,15 +226,13 @@ function buildEffectData(value) {
             level: { value: 0 },
             duration: { unit: "encounter", value: null, sustained: false, expiry: "turn-start" },
             start: { value: 0, initiative: null },
-            // Always show the numeric counter; no labels / no plus prefix.
             badge: { type: "counter", value },
-            tokenIcon: { show: true },
+            tokenIcon: { show: false },
             rules: [
                 {
                     key: "FlatModifier",
                     selector: SELECTORS,
                     type: "untyped",
-                    // Pull directly from the visible counter badge
                     value: "@item.badge.value",
                 },
             ],
