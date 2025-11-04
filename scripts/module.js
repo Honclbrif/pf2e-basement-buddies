@@ -3,6 +3,7 @@ import { MODULE_ID, SETTING_KEYS, registerSettings } from "./settings.js";
 import { logger } from "./logger.js";
 import { installAvoidDireFate, uninstallAvoidDireFate } from "./features/avoid-dire-fate.js";
 import { installEscalationDie, uninstallEscalationDie } from "./features/escalation-die.js";
+import { installNudgeFate, uninstallNudgeFate } from "./features/nudge-fate.js";
 
 const onADF = (enabled) => {
     if (game.user.isGM) {
@@ -12,6 +13,11 @@ const onADF = (enabled) => {
 const onED = (enabled) => {
     if (game.user.isGM) {
         enabled ? installEscalationDie() : uninstallEscalationDie();
+    }
+};
+const onNF = (enabled) => {
+    if (game.user.isGM) {
+        enabled ? installNudgeFate() : uninstallNudgeFate();
     }
 };
 
@@ -35,8 +41,10 @@ Hooks.once("ready", () => {
     try {
         const adf = game.settings.get(MODULE_ID, SETTING_KEYS.avoidDireFate);
         const ed = game.settings.get(MODULE_ID, SETTING_KEYS.escalationDie);
+        const nf = game.settings.get(MODULE_ID, SETTING_KEYS.nudgeFate);
         onADF(!!adf);
         onED(!!ed);
+        onNF(!!nf);
         logger.log("Ready");
     } catch (err) {
         logger.error("Ready error", err);

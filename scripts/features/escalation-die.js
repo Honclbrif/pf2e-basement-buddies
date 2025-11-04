@@ -6,7 +6,7 @@ const EFFECT_NAME = "Escalation Die!";
 const MAX_BONUS = 5;
 const SELECTORS = ["strike-attack-roll", "spell-attack-roll", "spell-dc"];
 const STATE_KEY = "pf2eEscalation"; // namespace on game
-
+const FEATURE_ID = "ED:";
 let _edHooks = null;
 
 // Effect prototype (untyped FlatModifier; selectors in one rule)
@@ -31,9 +31,8 @@ const EFFECT_DATA = {
 
 // === HOOKS ===
 function registerHooks() {
-    logger.debug("ED: registerHooks:start");
     if (_edHooks) {
-        logger.warn("ED: Hooks already installed");
+        logger.warn(FEATURE_ID, "Hooks already installed");
         return;
     }
 
@@ -41,15 +40,15 @@ function registerHooks() {
 
     // On combat creation (round starts at 1). Ensure no effect at start.
     _edHooks.createCombat = Hooks.on("createCombat", (combat) => {
-        logger.debug("ED: createCombat");
+        logger.debug(FEATURE_ID, "createCombat");
         trySyncEscalationDieForCombat(combat, combat?.round ?? 1);
     });
 
     // On round change, adjust all combatants.
     _edHooks.updateCombat = Hooks.on("updateCombat", (combat, changed) => {
-        logger.debug("ED: updateCombat", changed);
+        logger.debug(FEATURE_ID, "updateCombat", changed);
         if (Object.hasOwn(changed, "round")) {
-            logger.debug("ED: updateCombat");
+            logger.debug(FEATURE_ID, "updateCombat");
             trySyncEscalationDieForCombat(combat, combat.round ?? 1);
         }
     });
@@ -60,7 +59,7 @@ function registerHooks() {
         const actor = combatant?.actor;
         if (!combat || !isEligibleActor(actor)) return;
         const value = escalationValueFromRound(combat.round ?? 1);
-        logger.debug("ED: createCombatant → sync", actor?.name, "value", value);
+        logger.debug(FEATURE_ID, "createCombatant → sync", actor?.name, "value", value);
         // no await (don’t block the hook), but safe to await if you prefer
         syncActorEscalationEffect(actor, value);
     });
@@ -73,7 +72,7 @@ function registerHooks() {
 
         // If the actor still has another token in this combat, keep the effect.
         const stillPresent = combat.combatants.some(c => c.actor?.id === actor.id);
-        logger.debug("ED: deleteCombatant", actor?.name, "stillPresent?", stillPresent);
+        logger.debug(FEATURE_ID, "deleteCombatant", actor?.name, "stillPresent?", stillPresent);
 
         if (!stillPresent) {
             // sync to 0 → our sync function will delete the effect
@@ -84,7 +83,7 @@ function registerHooks() {
     // // On combat deletion, remove the effect from participants of that combat.
     // // pf2e delete the effect automatically on end of combat
     // Hooks.on("deleteCombat", (combat) => {
-    //     logger.debug("ED: deleteCombat");
+    //     logger.debug(FEATURE_ID, "deleteCombat");
     //     trySyncEscalationDieForCombat(combat, 0);
     // });
 
@@ -92,7 +91,7 @@ function registerHooks() {
     _edHooks.preUpdateItem = Hooks.on("preUpdateItem", (item, change, options, userId) => {
         if (!(item?.parent instanceof Actor)) return;
         if (item.type !== "effect" || item.name !== EFFECT_NAME) return;
-        logger.debug("ED: preUpdateItem");
+        logger.debug(FEATURE_ID, "preUpdateItem");
 
         // Allow our own updates (we set this option when updating).
         if (options?.[MODULE_ID]?.edManaged === true) return;
@@ -112,28 +111,20 @@ function registerHooks() {
 }
 
 export async function installEscalationDie() {
-    logger.debug("ED: installEscalationDie");
-
+    logger.debug(FEATURE_ID, "installEscalationDie");
     registerHooks();
-
     trySyncEscalationDieForCombat(game.combat, game.combat?.round ?? 1);
-
-    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.On"));
 }
 
 export async function uninstallEscalationDie() {
-    logger.debug("ED: uninstallEscalationDie");
-
+    logger.debug(FEATURE_ID, "uninstallEscalationDie");
     trySyncEscalationDieForCombat(game.combat, 0);
-
     if (_edHooks) {
         for (const [event, id] of Object.entries(_edHooks)) {
             Hooks.off(event, id);
         }
     }
-
     _edHooks = null;
-    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ED.Off"));
 }
 
 /** Compute +N from round (0 at round 1, +1 at round 2, capped). */

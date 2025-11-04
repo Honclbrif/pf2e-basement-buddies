@@ -1,23 +1,21 @@
 // scripts/features/avoid-dire-fate.js
 import { MODULE_ID } from "../settings.js";
 import { logger } from "../logger.js";
-
+const FEATURE_ID = "ADF:";
 // Keep a handle so we can unhook cleanly
 let _adfHookId = null;
 
 export function installAvoidDireFate() {
     if (_adfHookId) return;
     _adfHookId = Hooks.on("renderChatMessage", onRenderChatMessage);
-    logger.log("ADF: installAvoidDireFate");
-    //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ADF.On"));        //v0.5.1 No longer show, its working
+    logger.log(FEATURE_ID, "installAvoidDireFate");
 }
 
 export function uninstallAvoidDireFate() {
     if (_adfHookId) {
         Hooks.off("renderChatMessage", _adfHookId);
-        logger.log("ADF: uninstallAvoidDireFate");
+        logger.log(FEATURE_ID, "uninstallAvoidDireFate");
         _adfHookId = null;
-        //ui.notifications?.info(game.i18n.localize("PF2EBB.Notif.ADF.Off"));   //v0.5.1 No longer show, its working
     }
 }
 
@@ -62,11 +60,11 @@ async function onRenderChatMessage(message, $html /* jQuery | HTMLElement */, da
             ev.preventDefault();
             ev.stopPropagation();
 
-            logger.debug("ADF: button clicked", { mid: message.id, selectorHit: btn.className || btn.getAttribute("data-action") });
+            logger.debug(FEATURE_ID, "button clicked", { mid: message.id, selectorHit: btn.className || btn.getAttribute("data-action") });
 
             const { actor } = await resolveSpeakerActor(message.speaker);
             if (!actor) {
-                logger.warn("ADF: no actor resolved from speaker; aborting.");
+                logger.warn(FEATURE_ID, "no actor resolved from speaker; aborting.");
                 return;
             }
 
@@ -99,12 +97,12 @@ async function onRenderChatMessage(message, $html /* jQuery | HTMLElement */, da
                 await message.setFlag(MODULE_ID, "adf.applied", true);
                 await message.setFlag(MODULE_ID, "adf.text", bannerText);
             } catch (e) {
-                logger.warn("ADF: setFlag failed; injecting DOM-only", e);
+                logger.warn(FEATURE_ID, "setFlag failed; injecting DOM-only", e);
             }
 
             // Consume Harrow Omen effect(s)
             const removed = await consumeHarrowOmen(actor);
-            logger.debug("ADF: removed Harrow Omen?", removed);
+            logger.debug(FEATURE_ID, "removed Harrow Omen?", removed);
 
             // Update THIS rendered DOM non-destructively
             injectBanner(contentEl, bannerText);
@@ -114,7 +112,7 @@ async function onRenderChatMessage(message, $html /* jQuery | HTMLElement */, da
         root.addEventListener("click", handler, true);
 
     } catch (err) {
-        logger.error("ADF: renderChatMessage error", err);
+        logger.error(FEATURE_ID, "renderChatMessage error", err);
     }
 }
 
@@ -142,7 +140,7 @@ async function resolveSpeakerActor(speaker = {}) {
 
         return { actor, token: tokenDoc, scene: tokenDoc?.parent ?? game.scenes.get(speaker.scene) ?? null };
     } catch (e) {
-        logger.error("ADF: resolveSpeakerActor error", e);
+        logger.error(FEATURE_ID, "resolveSpeakerActor error", e);
         return { actor: null, token: null, scene: null };
     }
 }
@@ -157,13 +155,10 @@ async function consumeHarrowOmen(actor) {
             return /harrow\s*omen/i.test(name) || /harrow-omen/.test(slug);
         });
         if (!toRemove.length) return false;
-        await actor.deleteEmbeddedDocuments(
-            "Item",
-            toRemove.map((e) => e.id)
-        );
+        await actor.deleteEmbeddedDocuments("Item", toRemove.map((e) => e.id));
         return true;
     } catch (e) {
-        logger.error("ADF: consumeHarrowOmen error", e);
+        logger.error(FEATURE_ID, "consumeHarrowOmen error", e);
         return false;
     }
 }
@@ -195,9 +190,9 @@ function injectBanner(contentEl, text) {
         banner.style.fontSize = "0.9rem";
 
         host.prepend(banner);
-        logger.debug("ADF: banner injected");
+        logger.debug(FEATURE_ID, "banner injected");
     } catch (e) {
-        logger.error("ADF: injectBanner error", e);
+        logger.error(FEATURE_ID, "injectBanner error", e);
     }
 }
 
@@ -216,8 +211,8 @@ function disableADFButtons(root) {
             btn.classList.add("adf-used");
             if (!btn.dataset.preserveText) btn.textContent = btn.dataset.usedText || "Avoid Dire Fate used";
         }
-        logger.debug("ADF: buttons disabled", { count: buttons.length });
+        logger.debug(FEATURE_ID, "buttons disabled", { count: buttons.length });
     } catch (e) {
-        logger.error("ADF: disableADFButtons error", e);
+        logger.error(FEATURE_ID, "disableADFButtons error", e);
     }
 }

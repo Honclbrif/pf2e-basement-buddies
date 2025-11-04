@@ -1,15 +1,10 @@
 {
-    "PF2EBB.Settings.Debug.Title": "Debugging",
     "PF2EBB.Settings.Debug.ToggleName": "Enable debug logging",
-    "PF2EBB.Settings.Debug.ToggleHint": "If checked, verbose debug logs will be printed to the browser console.",
-    "PF2EBB.Settings.ADF.Title": "Avoid Dire Fate",
+    "PF2EBB.Settings.Debug.ToggleHint": "Verbose debug logs will be printed to the browser console.",
     "PF2EBB.Settings.ADF.ToggleName": "Consume Harrow Omen chat button",
-    "PF2EBB.Settings.ADF.ToggleHint": "If checked, will install a hook to consume the Harrow Omen effect if the Avoid Dire Fate button is pressed.  Token needs updated Avoid Dire Fate reaction.",
-    "PF2EBB.Settings.ED.Title": "Escalation Die!",
+    "PF2EBB.Settings.ADF.ToggleHint": "Allows consumption of the Harrow Omen effect if the Avoid Dire Fate button is pressed.  Token needs updated Avoid Dire Fate reaction.",
     "PF2EBB.Settings.ED.ToggleName": "Give players a bone for long combats",
-    "PF2EBB.Settings.ED.ToggleHint": "If checked, runs the Escalation Die! logic at combat start and whenever the combat round changes.",
-    "PF2EBB.Notif.ADF.On": "PF2e Basement Buddies: Avoid Dire Fate installed.",
-    "PF2EBB.Notif.ADF.Off": "PF2e Basement Buddies: Avoid Dire Fate removed.",
-    "PF2EBB.Notif.ED.On": "PF2e Basement Buddies: Escalation Die! installed.",
-    "PF2EBB.Notif.ED.Off": "PF2e Basement Buddies: Escalation Die! removed."
+    "PF2EBB.Settings.ED.ToggleHint": "Runs the Escalation Die! logic at combat start and whenever the combat round changes.",
+    "PF2EBB.Settings.NF.ToggleName": "Nudge Fate Reminder",
+    "PF2EBB.Settings.NF.ToggleHint": "Add a reminder to the chat if the Nudge Fate effect would change the outcome of the result."
 }

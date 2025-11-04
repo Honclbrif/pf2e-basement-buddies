@@ -1,8 +1,9 @@
 
 import { logger } from "./logger.js";
 export const MODULE_ID = "pf2e-basement-buddies";
-export const SETTING_KEYS = { debug: "debug.enabled", avoidDireFate: "avoidDireFate.enabled", escalationDie: "escalationDie.enabled", escalationDieShowBadge: "escalationDie.showBadge" };
-export function registerSettings(onAvoidToggle, onEscalationToggle) {
+export const SETTING_KEYS = { debug: "debug.enabled", avoidDireFate: "avoidDireFate.enabled", escalationDie: "escalationDie.enabled", nudgeFate: "nudgeFate.enabled" };
+
+export function registerSettings(onAvoidToggle, onEscalationToggle, onNudgeFateToggle) {
     logger.debug("Registering settings...");
     game.settings.register(MODULE_ID, SETTING_KEYS.debug, {
         name: game.i18n.localize("PF2EBB.Settings.Debug.ToggleName"),
@@ -21,6 +22,12 @@ export function registerSettings(onAvoidToggle, onEscalationToggle) {
         hint: game.i18n.localize("PF2EBB.Settings.ED.ToggleHint"),
         scope: "world", config: true, type: Boolean, default: false, restricted: true,
         onChange: (v) => { logger.debug("ED setting changed:", v); onEscalationToggle?.(!!v); },
+    });
+    game.settings.register(MODULE_ID, SETTING_KEYS.nudgeFate, {
+        name: game.i18n.localize("PF2EBB.Settings.NF.ToggleName"),
+        hint: game.i18n.localize("PF2EBB.Settings.NF.ToggleHint"),
+        scope: "world", config: true, type: Boolean, default: false, restricted: true,
+        onChange: (v) => { logger.debug("NF setting changed:", v); onNudgeFateToggle?.(!!v); },
     });
     logger.debug("Finished registering settings.");
 }
