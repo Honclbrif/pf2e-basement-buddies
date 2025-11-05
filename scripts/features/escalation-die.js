@@ -5,7 +5,6 @@ import { logger } from "../logger.js";
 const EFFECT_NAME = "Escalation Die!";
 const MAX_BONUS = 5;
 const SELECTORS = ["strike-attack-roll", "spell-attack-roll", "spell-dc"];
-const STATE_KEY = "pf2eEscalation"; // namespace on game
 const FEATURE_ID = "ED:";
 let _edHooks = null;
 

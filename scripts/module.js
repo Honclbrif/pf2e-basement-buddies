@@ -24,11 +24,11 @@ const onNF = (enabled) => {
 Hooks.once("init", () => {
     console.log("[PF2e Basement Buddies] Init");
     try {
-        registerSettings(onADF, onED);
+        registerSettings(onADF, onED, onNF);
         try { logger.setDebug(!!game.settings.get(MODULE_ID, SETTING_KEYS.debug)); } catch { }
         const mod = game.modules.get(MODULE_ID);
         if (mod) {
-            mod.api = { onADF, onED, logger };
+            mod.api = { onADF, onED, onNF, logger };
         }
     } catch (err) { logger.error("Init error", err); }
 });
@@ -47,6 +47,6 @@ Hooks.once("ready", () => {
         onNF(!!nf);
         logger.log("Ready");
     } catch (err) {
-        logger.error("Ready error", err);
+        logger.error("Ready error:", err.message);
     }
 });
